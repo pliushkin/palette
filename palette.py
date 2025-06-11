@@ -249,50 +249,54 @@ class PaletteFMAutomator:
         except:
             pass
     
- 
+     
     def get_result_image(self, driver):
-        i = 0
         try:
-            # Ждём появления любого изображения с base64 в src
-            self.log("> Поиск изображения с base64 в src...")
-            image_element = WebDriverWait(driver, TIMEOUT_MEDIUM).until(
+            self.log("> Ожидание появления первого изображения...")
+            # Захват первого изображения
+            first_image_element = WebDriverWait(driver, TIMEOUT_MEDIUM).until(
                 EC.visibility_of_element_located((By.XPATH, "//img[contains(@src, 'base64')]"))
             )
-            image_src = image_element.get_attribute("src")
-            self.log(f"> Найдено изображение: {image_src[:50]}...")
-            check = 0
-            if image_src[:50]==check: 
-                
-                self.log("> Поиск изображения с base64 в src...")
-                image_element = WebDriverWait(driver, TIMEOUT_MEDIUM).until(
-                    EC.visibility_of_element_located((By.XPATH, "//img[contains(@src, 'base64')]"))
-                )
-                image_src = image_element.get_attribute("src")
-                self.log(f"> Найдено изображение: {image_src[:50]}...")
-                check = 0
-                  
+            first_image_src = first_image_element.get_attribute("src")
+            self.log(f"> Первое изображение найдено: {first_image_src[:50]}...")
+
+            # Ожидание исчезновения первого изображения
+            self.log("> Ожидание исчезновения первого изображения...")
+            WebDriverWait(driver, TIMEOUT_MEDIUM).until(
+                EC.invisibility_of_element_located((By.XPATH, f"//img[@src='{first_image_src}']"))
+            )
+            self.log("> Первое изображение исчезло.")
+
+            # Захват второго изображения
+            self.log("> Ожидание появления второго изображения...")
+            second_image_element = WebDriverWait(driver, TIMEOUT_MEDIUM).until(
+                EC.visibility_of_element_located((By.XPATH, "//img[contains(@src, 'base64')]"))
+            )
+            second_image_src = second_image_element.get_attribute("src")
+            self.log(f"> Второе изображение найдено: {second_image_src[:50]}...")
+
+            # Сравнение первого и второго изображений
+            if first_image_src != second_image_src:
+                self.log("> Изображения различаются. Сохранение второго изображения...")
+                if second_image_src and second_image_src.startswith('data:image'):
+                    # Извлекаем base64-часть после запятой
+                    base64_data = second_image_src.split(',', 1)[1]
+                    image_data = base64.b64decode(base64_data)
+                    return image_data
+                else:
+                    self.log("> Атрибут 'src' второго изображения не содержит base64-данных.")
+                    return None
             else:
-                check = image_src[:50]
-                i=i+1
-                if i==2:
-                    if image_src and image_src.startswith('data:image'):
-                        # Извлекаем base64-часть после запятой
-                        base64_data = image_src.split(',', 1)[1]
-                        image_data = base64.b64decode(base64_data)
-                        i = 0 
-                        return image_data
-                     
-                    else:
-                        self.log("> Атрибут 'src' не содержит base64-данных")
-                        return None
-                
+                self.log("> Изображения одинаковые. Сохранение не требуется.")
+                return None
+
         except TimeoutException:
-            self.log("> Ошибка: Изображение с base64 не найдено за отведённое время")
+            self.log("> Ошибка: Изображение не найдено за отведённое время.")
             return None
         except Exception as e:
             self.log(f"> Ошибка получения изображения: {str(e)}")
             return None
-            
+                
     def run(self):
         self.root.mainloop()
 

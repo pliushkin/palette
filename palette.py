@@ -1,5 +1,7 @@
 import time
 import os
+import base64
+import random
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from selenium import webdriver
@@ -8,21 +10,27 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import WebDriverException, TimeoutException
-import base64
-import random
+from selenium.common.exceptions import TimeoutException
+
+# Константы
+HEADLESS_MODE = False  # Режим без отображения браузера
+TIMEOUT_SHORT = 5    # Короткое ожидание для всплывающих окон
+TIMEOUT_MEDIUM = 15  # Основное ожидание элементов
+TIMEOUT_LONG = 30    # Долгое ожидание (например, для загрузки страницы)
 
 class PaletteFMAutomator:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Palette.fm Automator")
-        self.root.geometry("500x420")
+        self.root.geometry("800x800")
         self.root.resizable(False, False)
 
         # Переменные
         self.image_path = tk.StringVar()
         self.status = tk.StringVar(value="Готов к работе")
-        self.save_dir_path = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Downloads"))
+        self.save_dir_path = tk.StringVar(
+            value=os.path.join(os.path.expanduser("~"), "Downloads")
+        )
 
         # Создаем элементы интерфейса
         self.create_widgets()
@@ -73,7 +81,7 @@ class PaletteFMAutomator:
         # Консоль
         console_frame = ttk.Frame(self.root, padding=10)
         console_frame.pack(fill="both", expand=True)
-        self.console = tk.Text(console_frame, height=8, bg="#f0f0f0", font=("Consolas", 9))
+        self.console = tk.Text(console_frame, height=40, bg="#ffffff", font=("Consolas", 9))
         self.console.pack(fill="both")
         self.console.insert("end", "> Выберите изображение и нажмите 'Запустить обработку'\n")
 
@@ -119,7 +127,6 @@ class PaletteFMAutomator:
         self.update_progress(10)
 
         try:
-            # Настройка Chrome
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_argument('--ignore-certificate-errors')
             chrome_options.add_argument('--ignore-ssl-errors')
@@ -128,10 +135,11 @@ class PaletteFMAutomator:
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--start-maximized')
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
 
-            # Отключение медиа и автовоспроизведения
+            if HEADLESS_MODE:
+                chrome_options.add_argument('--headless=new')
+
             prefs = {
                 "profile.default_content_setting_values.automatic_downloads": 1,
                 "download_restrictions": 3,
@@ -144,58 +152,50 @@ class PaletteFMAutomator:
 
             user_agent = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(90, 120)}.0.0.0 Safari/537.36"
             chrome_options.add_argument(f'user-agent={user_agent}')
-
             self.log("> Инициализация браузера...")
+            print (user_agent)
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_options)
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            wait = WebDriverWait(driver, 15)
+            wait = WebDriverWait(driver, TIMEOUT_SHORT)
+            
             self.update_progress(20)
 
             try:
                 self.log("> Открываем сайт palette.fm...")
                 driver.get("https://palette.fm/color/filters") 
                 self.update_progress(30)
-
+                
                 self.close_popups(driver)
 
                 self.log("> Начинаем процесс загрузки...")
-
-                # Клик на кнопку загрузки
                 upload_button = wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'UPLOAD NEW IMAGE')]"))
                 )
-                upload_button.click()
-
+              
                 self.log("> Загружаем изображение...")
 
-                # Получаем поле загрузки
                 file_input = wait.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
                 )
 
-                # Убираем атрибут "hidden", если он есть
                 driver.execute_script("arguments[0].removeAttribute('hidden')", file_input)
                 driver.execute_script("arguments[0].style.display = 'block'", file_input)
                 driver.execute_script("arguments[0].style.visibility = 'visible'", file_input)
 
-                # Отправляем путь к файлу
                 file_path = os.path.abspath(self.image_path.get())
                 file_input.send_keys(file_path)
-
-                self.log(f"> Файл '{os.path.basename(file_path)}' успешно отправлен")
+                self.log(f"> Файл '{os.path.basename(file_path)}' отправлен")
                 self.update_progress(40)
 
-                # Ожидаем результат
-                self.log("> Ожидаем обработки изображения...")
+                self.log("> Ожидаем результата...")
                 wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.result-image")),
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.image-container")),
                     message="Результат не найден!"
                 )
                 self.log("> Изображение успешно обработано!")
                 self.update_progress(80)
 
-                # Получаем изображение
                 result_image = self.get_result_image(driver)
                 if result_image:
                     timestamp = int(time.time())
@@ -215,14 +215,19 @@ class PaletteFMAutomator:
                 self.status.set("Ошибка: результат не загружен")
                 self.update_progress(100)
 
+            except WebDriverException as e:
+                self.log(f"> Ошибка подключения к браузеру — {str(e)}")
+                driver.save_screenshot("browser_error.png")
+                self.status.set("Ошибка браузера")
+                self.update_progress(100)
+
             except Exception as e:
                 self.log(f"> Ошибка: {str(e)}")
                 self.status.set("Ошибка при выполнении")
                 driver.save_screenshot("error_screenshot.png")
-                self.log("> Скриншот ошибки сохранен")
 
             finally:
-                time.sleep(1)
+                time.sleep(2)
                 driver.quit()
                 self.log("> Браузер закрыт")
 
@@ -231,46 +236,63 @@ class PaletteFMAutomator:
             self.status.set("Ошибка инициализации")
 
         finally:
-            self.btn_run["state"] = "normal"       
+            self.btn_run["state"] = "normal"
+
     def close_popups(self, driver):
         try:
-            cookie_btn = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'cookie-consent__button')]"))
-            )
-            cookie_btn.click()
-            self.log("> Приняли cookie")
+            time.sleep(1)
+            self.log("> Автоматическое вводим путь к файлу...")
+            pyautogui.write(r"c:/1.jpg")  # Вводим путь к файлу
+            pyautogui.press('enter')  # Нажимаем Enter
+            self.update_progress(40)
             time.sleep(1)
         except:
             pass
-
-        try:
-            close_btn = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button.close-button"))
-            )
-            close_btn.click()
-            self.log("> Закрыли всплывающее окно")
-            time.sleep(1)
-        except:
-            pass
-
+    
+ 
     def get_result_image(self, driver):
+        i = 0
         try:
-            result_div = WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.result-image"))
+            # Ждём появления любого изображения с base64 в src
+            self.log("> Поиск изображения с base64 в src...")
+            image_element = WebDriverWait(driver, TIMEOUT_MEDIUM).until(
+                EC.visibility_of_element_located((By.XPATH, "//img[contains(@src, 'base64')]"))
             )
-            background_image = result_div.value_of_css_property("background-image")
-            if background_image.startswith('url("data:image'):
-                start_index = background_image.find("base64,") + 7
-                end_index = background_image.find('")', start_index)
-                base64_data = background_image[start_index:end_index]
-                image_data = base64.b64decode(base64_data)
-                return image_data
-            self.log("> Не удалось извлечь изображение из CSS")
+            image_src = image_element.get_attribute("src")
+            self.log(f"> Найдено изображение: {image_src[:50]}...")
+            check = 0
+            if image_src[:50]==check: 
+                
+                self.log("> Поиск изображения с base64 в src...")
+                image_element = WebDriverWait(driver, TIMEOUT_MEDIUM).until(
+                    EC.visibility_of_element_located((By.XPATH, "//img[contains(@src, 'base64')]"))
+                )
+                image_src = image_element.get_attribute("src")
+                self.log(f"> Найдено изображение: {image_src[:50]}...")
+                check = 0
+                  
+            else:
+                check = image_src[:50]
+                i=i+1
+                if i==2:
+                    if image_src and image_src.startswith('data:image'):
+                        # Извлекаем base64-часть после запятой
+                        base64_data = image_src.split(',', 1)[1]
+                        image_data = base64.b64decode(base64_data)
+                        i = 0 
+                        return image_data
+                     
+                    else:
+                        self.log("> Атрибут 'src' не содержит base64-данных")
+                        return None
+                
+        except TimeoutException:
+            self.log("> Ошибка: Изображение с base64 не найдено за отведённое время")
             return None
         except Exception as e:
             self.log(f"> Ошибка получения изображения: {str(e)}")
             return None
-
+            
     def run(self):
         self.root.mainloop()
 

@@ -1,0 +1,2 @@
+Automatic colorer for Palette
+

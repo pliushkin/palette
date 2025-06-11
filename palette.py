@@ -12,12 +12,13 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import TimeoutException
 import threading
+from datetime import datetime
 
 # Константы
-HEADLESS_MODE = False  # Режим без отображения браузера
+HEADLESS_MODE = True  # Режим без отображения браузера
 TIMEOUT_SHORT = 5      # Короткое ожидание для всплывающих окон
-TIMEOUT_MEDIUM = 15    # Основное ожидание элементов
-TIMEOUT_LONG = 30      # Долгое ожидание (например, для загрузки страницы)
+TIMEOUT_MEDIUM = 10    # Основное ожидание элементов
+TIMEOUT_LONG = 10      # Долгое ожидание (например, для загрузки страницы)
 
 class PaletteFMAutomator:
     def __init__(self):
@@ -96,13 +97,15 @@ class PaletteFMAutomator:
             self.save_dir_path.set(save_dir)
             self.log(f"> Выбрана директория для сохранения: {save_dir}")
 
+
     def log(self, message):
-        """Добавляет сообщение в консоль."""
+        """Добавляет сообщение в консоль с временной меткой."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Формат: ГГГГ-ММ-ДД ЧЧ:ММ:СС
+        full_message = f"[{timestamp}] {message}"
         def update_console():
-            self.console.insert("end", message + "\n")
+            self.console.insert("end", full_message + "\n")
             self.console.see("end")
         self.root.after(0, update_console)
-
     def update_progress(self, value):
         """Обновляет прогресс-бар."""
         def update_progressbar():

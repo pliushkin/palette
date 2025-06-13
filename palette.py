@@ -17,8 +17,8 @@ from datetime import datetime
 # Константы
 HEADLESS_MODE = True  # Режим без отображения браузера
 TIMEOUT_SHORT = 5      # Короткое ожидание для всплывающих окон
-TIMEOUT_MEDIUM = 10    # Основное ожидание элементов
-TIMEOUT_LONG = 10      # Долгое ожидание (например, для загрузки страницы)
+TIMEOUT_MEDIUM = 15    # Основное ожидание элементов
+TIMEOUT_LONG = 30      # Долгое ожидание (например, для загрузки страницы)
 
 class PaletteFMAutomator:
     def __init__(self):
